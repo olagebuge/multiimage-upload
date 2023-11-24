@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>批次上傳圖片範例</title>
+    <style>
+      .smallimg {
+        width: 120px;
+        height: 120px;
+        object-fit: cover;
+      }
+      #imagePreview {
+        display: flex;
+        flex-direction: column;
+        gap: 3;
+      }
+      .item {
+        border: 1px solid #ddd;
+        padding: 10px 5px;
+      }
+      .item.dragging :where(.details, i) {
+        opacity: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <form action="/upload" method="POST" enctype="multipart/form-data">
+      <label for="titleInput">標題</label>
+      <input name="title" type="text" id="titleInput" />
+
+      <label for="photosInput">上傳照片</label>
+      <input
+        name="photos"
+        type="file"
+        id="photosInput"
+        accept=".jpg, .jpeg, .png"
+        multiple
+      />
+
+      <button>確認上傳</button>
+    </form>
+
+    <div id="imagePreview"></div>
+    <% if(uploadedPhotos.length >0){%>
+    <div>
+      <%uploadedPhotos.forEach(uploadedPhoto =>{%>
+      <h3><%=uploadedPhoto.title%></h3>
+      <% uploadedPhoto.photos.forEach(photo=>{%>
+      <img src="<%=photo.imageUrl%>" alt="<%=photo.alt%>" class="smallimg" />
+      <%})%>
+    </div>
+    <%})}else{%>
+    <p>你沒有上傳任何照片...</p>
+    <%}%>
+
+    <script>
+      let files = [];
+      const photosInput = document.getElementById("photosInput");
+      const imagePreview = document.getElementById("imagePreview");
+
+      photosInput.addEventListener("change", () => {
+        let file = photosInput.files;
+        for (let i = 0; i < file.length; i++) {
+          if (files.every((e) => e.name != file[i].name)) files.push(file[i]); //防止同名檔案上傳
+        }
+        showImages();
+      });
+
+      //更新顯示圖片
+      const showImages = () => {
+        let images = "";
+        files.forEach((e, i) => {
+          images += `
+          <div class="item" draggable="true">
+            <div class="details">
+              <span onclick="delImage(${i})" class="mr-1">&times;</span>
+              <img src=${URL.createObjectURL(
+                e
+              )} alt="章節頁數" class="smallimg"/>
+              <span class="img-name">${e.name}</span>
+            </div>
+            <i class="uil uil-draggabledots"></i>
+          </div>`;
+        });
+        imagePreview.innerHTML = images;
+
+        const items = imagePreview.querySelectorAll(".item");
+        items.forEach((item) => {
+          item.addEventListener("dragstart", () => {
+            //稍微延遲附加dragging樣式 , 讓抓起來的內容物不會消失
+            setTimeout(() => item.classList.add("dragging"), 0);
+          });
+
+          item.addEventListener("dragend", () => {
+            item.classList.remove("dragging"); 
+
+              const items = [...imagePreview.querySelectorAll(".item")];
+              const updatedFiles = items.map((updatedItem) => {                
+                const fileName = updatedItem.querySelector(".img-name").textContent;
+                return files.find((file) => file.name === fileName);                
+              });
+
+              console.log(files);//替換前
+              files = updatedFiles;
+              console.log(files);//替換後
+          });
+          
+        });
+      };
+
+      //刪除圖片
+      const delImage = (index) => {
+        files.splice(index, 1);
+        showImages();
+      };
+
+      const initSortableList = (e) => {
+        e.preventDefault();
+        const draggingItem = imagePreview.querySelector(".dragging");
+        const siblings = [
+          ...imagePreview.querySelectorAll(".item:not(.dragging)"),
+        ];
+        // 找到拖動項目新的位置
+        let nextSibling = siblings.find((sibling) => {
+          return e.clientY <= sibling.offsetTop + sibling.offsetHeight / 2;
+        });
+        // 在 DOM 中移動拖動項目到新位置
+        imagePreview.insertBefore(draggingItem, nextSibling);
+
+        // 也在 files array
+        const draggingItemIndex = files.findIndex(
+          (file) => file.name === draggingItem.querySelector("span").textContent
+        );
+        const nextSiblingIndex = nextSibling
+          ? files.findIndex(
+              (file) =>
+                file.name === nextSibling.querySelector("span").textContent
+            )
+          : siblings.length;
+
+        files.splice(
+          nextSiblingIndex,
+          0,
+          files.splice(draggingItemIndex, 1)[0]
+        );
+      };
+
+      imagePreview.addEventListener("dragover", initSortableList);
+      imagePreview.addEventListener("dragenter", (e) => e.preventDefault());
+
+      //獲取表單
+      const form = document.querySelector("form");
+
+      form.addEventListener('submit', (e) => {
+
+        e.preventDefault(); 
+        const formData = new FormData();        
+        //const filesWithAlt = []; // 新增陣列來存儲所有的 fileWithAltJSON 字串
+        files.forEach(file => {    
+          formData.append('photos', file); // 直接將文件添加到 FormData 中
+          formData.append('alt', file.name); // 添加對應的 alt 文本      
+          //const fileWithAlt = { imageUrl: file.name, alt: file.name };          
+          //filesWithAlt.push(fileWithAlt); // 將每個 fileWithAlt 存入陣列          
+        });
+
+        // 這裡直接將整個陣列存入 'photos'
+        //formData.append('photos', JSON.stringify(filesWithAlt));
+
+          const title = document.getElementById('titleInput').value;
+          formData.append('title', title);
+
+          fetch('/upload', {
+            method: 'POST',
+            body: formData
+          })
+          .then(res => {
+            console.log("上傳成功");
+            
+          })
+          .catch(err => {
+            console.log(err);
+          });
+      })
+    </script>
+  </body>
+</html>
